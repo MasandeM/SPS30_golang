@@ -8,35 +8,37 @@ import (
 	"go.bug.st/serial"
 )
 
-const SHDLC_START = 0x7e
-const SHDLC_STOP = 0x7e
-const SHDLC_FRAME_MAX_TX_FRAME_SIZE = 520 // start/stop + (4 header + 255 data) * 2 for byte stuffing
-const SHDLC_FRAME_MAX_RX_FRAME_SIZE = 522 // start/stop + (5 header + 255 data) * 2 because of byte stuffing
+const shdlcStart = 0x7e
+const shdlcStop = 0x7e
+const shdlcFrameMaxTxFrameSize = 520 // start/stop + (4 header + 255 data) * 2 for byte stuffing
+const shdlcFrameMaxRxFrameSize = 522 // start/stop + (5 header + 255 data) * 2 because of byte stuffing
 
-const SHDLC_ERR_NO_DATA = -1
-const SHDLC_ERR_MISSING_START = -2
-const SHDLC_ERR_MISSING_STOP = -3
-const SHDLC_ERR_CRC_MISMATCH = -4
-const SHDLC_ERR_ENCODING_ERROR = -5
-const SHDLC_ERR_TX_INCOMPLETE = -6
-const SHDLC_ERR_FRAME_TOO_LONG = -7
-const SHDLC_RX_HEADER_SIZE = 4
-const PERIPHERAL_ADDR = 0
-const CMD_READ_VERSION = 0xd1
-const CMD_START_MEASUREMENT = 0x00
-const CMD_READ_MEASUREMENT = 0x03
-const CMD_WAKE_UP = 0x11
-const ERR_NOT_ENOUGH_DATA = -1
+const shdlcErrNoData = -1
+const shdlcErrMissingStart = -2
+const shdlcErrMissingStop = -3
+const shdlcErrCRCMismatch = -4
+const shdlcErrEncodingError = -5
+const shdlcErrTxIncomplete = -6
+const shdlcErrFrameTooLong = -7
+const shdlcRxHeaderSize = 4
+const peripheralAddr = 0
+const cmdReadVersion = 0xd1
+const cmdStartMeasurement = 0x00
+const CmdReadMeasurement = 0x03
+const CmdWakeUp = 0x11
+const ErrNotEnoughData = -1
 
-var SUBCMD_MEASUREMENT_START = [2]byte{0x01, 0x03}
+var subcmdMeasurementStart = [2]byte{0x01, 0x03}
 
-type SHDLCRxHeader struct {
+// header of a frame sent from the sps30 sensor
+type shdlcRxHeader struct {
 	addr     uint8
 	cmd      uint8
 	state    uint8
 	data_len uint8
 }
 
+// VersionInfo holds information about the firmware, hardware, and SHDLC protocol
 type VersionInfo struct {
 	FirmwarMajor    uint8
 	FirmwarMinor    uint8
@@ -45,6 +47,10 @@ type VersionInfo struct {
 	SHDLCMinor      uint8
 }
 
+// Measurement holds the particulate matter(PM) values measured for varying sizes.
+// MC refers Mass concentration measured in µg/m³
+// NC refers particle count measure in #/cm³
+// Typical Particle size average particle diameter  measured in nm
 type Measurement struct {
 	Mc1p0               float32
 	Mc2p5               float32
@@ -58,43 +64,46 @@ type Measurement struct {
 	TypicalParticleSize float32
 }
 
+// Device represesnts the SPS30 device
 type Device struct {
 	uart serial.Port
 }
 
+// New creates and initialises a new SPS30 Device
 func New(uart serial.Port) Device {
 	return Device{
 		uart: uart,
 	}
 }
 
+// Wakeup switches the device from sleep-mode to idle mode
 func (d *Device) Wakeup() {
 	data := []byte{0xff}
-	log.Println("sending data")
+
 	_, err := d.uart.Write(data)
-	log.Println("complete sending")
 	if err != nil {
 		log.Fatal(err)
 	}
-	rx_header := SHDLCRxHeader{}
+	rx_header := shdlcRxHeader{}
 	rdata := make([]byte, 0)
 
-	d.SHDLCTransmitReceive(PERIPHERAL_ADDR, CMD_WAKE_UP, 0, nil, 0, &rx_header, &rdata)
+	d.SHDLCTransmitReceive(peripheralAddr, CmdWakeUp, 0, nil, 0, &rx_header, &rdata)
 }
 
+// ReadVersion populates a VersionInfo struct with version information about the firmware, hardware, and SHDLC protocol
 func (d *Device) ReadVersion(version_info *VersionInfo) int {
 
-	rx_header := SHDLCRxHeader{}
+	rx_header := shdlcRxHeader{}
 	data := make([]byte, 7)
 
-	ret := d.SHDLCTransmitReceive(PERIPHERAL_ADDR, CMD_READ_VERSION, 0, nil, uint8(len(data)), &rx_header, &data)
+	ret := d.SHDLCTransmitReceive(peripheralAddr, cmdReadVersion, 0, nil, uint8(len(data)), &rx_header, &data)
 
 	if ret != 0 {
 		return ret
 	}
 
 	if int(rx_header.data_len) != len(data) {
-		return ERR_NOT_ENOUGH_DATA
+		return ErrNotEnoughData
 	}
 
 	if rx_header.state != 0 {
@@ -110,26 +119,27 @@ func (d *Device) ReadVersion(version_info *VersionInfo) int {
 	return 0
 }
 
+// StartMeasurement puts the SPS30 in Measure-mode.
 func (d *Device) StartMeasurement() int {
-	rx_header := SHDLCRxHeader{}
+	rx_header := shdlcRxHeader{}
 	subcmd := []byte{0x01, 0x03}
 	data := make([]byte, 0)
 
-	return d.SHDLCTransmitReceive(PERIPHERAL_ADDR, CMD_START_MEASUREMENT, uint8(len(subcmd)), subcmd, 0, &rx_header, &data)
+	return d.SHDLCTransmitReceive(peripheralAddr, cmdStartMeasurement, uint8(len(subcmd)), subcmd, 0, &rx_header, &data)
 }
 
 func (d *Device) ReadMeasurement(measurement *Measurement) int {
-	rx_header := SHDLCRxHeader{}
+	rx_header := shdlcRxHeader{}
 	data := make([]byte, 40)
 
-	ret := d.SHDLCTransmitReceive(PERIPHERAL_ADDR, CMD_READ_MEASUREMENT, 0, nil, uint8(len(data)), &rx_header, &data)
+	ret := d.SHDLCTransmitReceive(peripheralAddr, CmdReadMeasurement, 0, nil, uint8(len(data)), &rx_header, &data)
 
 	if ret != 0 {
 		return ret
 	}
 
 	if int(rx_header.data_len) != len(data) {
-		return ERR_NOT_ENOUGH_DATA
+		return ErrNotEnoughData
 	}
 
 	(*measurement).Mc1p0 = bytesFloat32(data[0:4])
@@ -160,7 +170,7 @@ func (d *Device) SHDLCTransmitReceive(addr uint8,
 	cmd uint8, tx_data_len uint8,
 	tx_data []byte,
 	max_rx_data_len uint8,
-	rx_header *SHDLCRxHeader,
+	rx_header *shdlcRxHeader,
 	rx_data *[]byte) int {
 	// transcieve (transmit then receive) and SHDLC Frame
 
@@ -175,12 +185,12 @@ func (d *Device) SHDLCTransmitReceive(addr uint8,
 
 func (d *Device) shdlc_tx(addr uint8, cmd uint8, data_len uint8, data []byte) int {
 
-	var tx_frame = [SHDLC_FRAME_MAX_TX_FRAME_SIZE]byte{}
+	var tx_frame = [shdlcFrameMaxTxFrameSize]byte{}
 	len := 0
 
 	crc := shdlc_crc(addr+cmd, data_len, data)
 
-	tx_frame[len] = SHDLC_START
+	tx_frame[len] = shdlcStart
 	len += 1
 
 	len = shdlc_stuff_data(1, []byte{addr}, &tx_frame, len)
@@ -191,7 +201,7 @@ func (d *Device) shdlc_tx(addr uint8, cmd uint8, data_len uint8, data []byte) in
 	tx_frame[len] = crc
 	len += 1
 
-	tx_frame[len] = SHDLC_STOP
+	tx_frame[len] = shdlStop
 	len += 1
 
 	_, err := d.uart.Write(tx_frame[:len])
@@ -203,9 +213,9 @@ func (d *Device) shdlc_tx(addr uint8, cmd uint8, data_len uint8, data []byte) in
 	return 0
 }
 
-func (d *Device) shdlc_rx(max_data_len int, rx_header *SHDLCRxHeader, data *[]byte) int {
+func (d *Device) shdlc_rx(max_data_len int, rx_header *shdlcRxHeader, data *[]byte) int {
 
-	rx_frame := make([]byte, SHDLC_FRAME_MAX_RX_FRAME_SIZE)
+	rx_frame := make([]byte, shdlcFrameMaxRxFrameSize)
 	header_index := 0
 	data_index := 0
 	var crc uint8
@@ -215,8 +225,8 @@ func (d *Device) shdlc_rx(max_data_len int, rx_header *SHDLCRxHeader, data *[]by
 		log.Fatal(err)
 	}
 
-	if frame_len < 1 || rx_frame[0] != SHDLC_START {
-		return SHDLC_ERR_MISSING_START
+	if frame_len < 1 || rx_frame[0] != shdlcStart {
+		return shdlcErrMissingStart
 	}
 
 	// get Frame Header
@@ -235,13 +245,13 @@ func (d *Device) shdlc_rx(max_data_len int, rx_header *SHDLCRxHeader, data *[]by
 
 	crc = shdlc_crc(rx_header.addr+rx_header.cmd+rx_header.state, rx_header.data_len, *data)
 	if crc != rx_frame[data_index] {
-		return SHDLC_ERR_CRC_MISMATCH
+		return shdlcErrCRCMismatch
 	}
 	data_index += 1
 
-	if data_index >= frame_len || rx_frame[data_index] != SHDLC_STOP {
+	if data_index >= frame_len || rx_frame[data_index] != shdlStop {
 		log.Fatal("Missing SHDLC STOP byte")
-		return SHDLC_ERR_CRC_MISMATCH
+		return shdlcErrCRCMismatch
 	}
 
 	return 0
@@ -272,7 +282,7 @@ func unstuff_byte(data []byte, index int, value *uint8) int {
 	}
 }
 
-func shdlc_stuff_data(data_len int, data []byte, stuffed_data *[SHDLC_FRAME_MAX_TX_FRAME_SIZE]byte, index int) int {
+func shdlc_stuff_data(data_len int, data []byte, stuffed_data *[shdlcFrameMaxTxFrameSize]byte, index int) int {
 
 	for i := 0; i < data_len; i++ {
 		switch data[i] {
