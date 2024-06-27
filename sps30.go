@@ -62,8 +62,6 @@ type Device struct {
 	uart serial.Port
 }
 
-var port serial.Port
-
 func New(uart serial.Port) Device {
 	return Device{
 		uart: uart,
@@ -134,16 +132,16 @@ func (d *Device) ReadMeasurement(measurement *Measurement) int {
 		return ERR_NOT_ENOUGH_DATA
 	}
 
-	(*measurement).Mc1p0 = BytesFloat32(data[0:4])
-	(*measurement).Mc2p5 = BytesFloat32(data[4:8])
-	(*measurement).Mc4p0 = BytesFloat32(data[8:12])
-	(*measurement).Mc10p0 = BytesFloat32(data[12:16])
-	(*measurement).Nc0p5 = BytesFloat32(data[16:20])
-	(*measurement).Nc1p0 = BytesFloat32(data[20:24])
-	(*measurement).Nc2p5 = BytesFloat32(data[24:28])
-	(*measurement).Nc4p0 = BytesFloat32(data[28:32])
-	(*measurement).Nc10p0 = BytesFloat32(data[32:36])
-	(*measurement).TypicalParticleSize = BytesFloat32(data[36:40])
+	(*measurement).Mc1p0 = bytesFloat32(data[0:4])
+	(*measurement).Mc2p5 = bytesFloat32(data[4:8])
+	(*measurement).Mc4p0 = bytesFloat32(data[8:12])
+	(*measurement).Mc10p0 = bytesFloat32(data[12:16])
+	(*measurement).Nc0p5 = bytesFloat32(data[16:20])
+	(*measurement).Nc1p0 = bytesFloat32(data[20:24])
+	(*measurement).Nc2p5 = bytesFloat32(data[24:28])
+	(*measurement).Nc4p0 = bytesFloat32(data[28:32])
+	(*measurement).Nc10p0 = bytesFloat32(data[32:36])
+	(*measurement).TypicalParticleSize = bytesFloat32(data[36:40])
 
 	if rx_header.state != 0 {
 		return int(rx_header.state)
@@ -152,7 +150,7 @@ func (d *Device) ReadMeasurement(measurement *Measurement) int {
 	return 0
 }
 
-func BytesFloat32(bytes []byte) float32 {
+func bytesFloat32(bytes []byte) float32 {
 	bits := binary.BigEndian.Uint32(bytes)
 	float := math.Float32frombits(bits)
 	return float
