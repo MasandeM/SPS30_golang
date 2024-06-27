@@ -1,2 +1,2 @@
 # sps30
-Golang driver for the SPS30. 
+SPS30 driver written in Go
