@@ -201,7 +201,7 @@ func (d *Device) shdlc_tx(addr uint8, cmd uint8, data_len uint8, data []byte) in
 	tx_frame[len] = crc
 	len += 1
 
-	tx_frame[len] = shdlStop
+	tx_frame[len] = shdlcStop
 	len += 1
 
 	_, err := d.uart.Write(tx_frame[:len])
@@ -249,7 +249,7 @@ func (d *Device) shdlc_rx(max_data_len int, rx_header *shdlcRxHeader, data *[]by
 	}
 	data_index += 1
 
-	if data_index >= frame_len || rx_frame[data_index] != shdlStop {
+	if data_index >= frame_len || rx_frame[data_index] != shdlcStop {
 		log.Fatal("Missing SHDLC STOP byte")
 		return shdlcErrCRCMismatch
 	}
