@@ -20,7 +20,7 @@ func main() {
 	}
 
 	log.Println("Connecting to UART")
-	var err error
+
 	uart, err := serial.Open("/dev/ttyUSB0", mode) //should be read from a config file or something
 	if err != nil {
 		log.Fatal(err)
@@ -31,10 +31,10 @@ func main() {
 
 	//Create a struct that is passed to a function then is populated. th
 	version_info := sps30.VersionInfo{}
-	ret := device.ReadVersion(&version_info)
+	err = device.ReadVersion(&version_info)
 
-	if ret != 0 {
-		log.Fatal("Error reading version information: ", ret)
+	if err != nil {
+		log.Fatal("Error reading version information: ", err)
 	}
 
 	fmt.Printf("FW: %d.%d, HW: %d, SHDLC: %d.%d\n",
@@ -44,19 +44,20 @@ func main() {
 		version_info.SHDLCMajor,
 		version_info.SHDLCMinor)
 
+	err = device.StartMeasurement()
+	if err != nil {
+		log.Fatal("error starting measurement")
+	}
+
 	measurement := sps30.Measurement{}
 	for {
-		ret = device.StartMeasurement()
-		if ret != 0 {
-			fmt.Println("error starting measurement")
-		}
 
-		fmt.Println("measurment started")
-		ret = device.ReadMeasurement(&measurement)
-		if ret != 0 {
-			fmt.Println("error reading measurement")
+		err = device.ReadMeasurement(&measurement)
+		if err != nil {
+			fmt.Println("[-] error reading measurement: %v", err)
 		} else {
-			fmt.Printf(`measured values:
+			fmt.Printf(`
+measured values:
 				%0.2f pm1.0
 				%0.2f pm2.5
 				%0.2f pm4.0
@@ -67,7 +68,7 @@ func main() {
 				%0.2f nc4.5
 				%0.2f nc10.0
 				%0.2f typical particle size
-	`,
+`,
 				measurement.Mc1p0, measurement.Mc2p5, measurement.Mc4p0, measurement.Mc10p0, measurement.Nc0p5,
 				measurement.Nc1p0, measurement.Nc2p5, measurement.Nc4p0, measurement.Nc10p0,
 				measurement.TypicalParticleSize)
