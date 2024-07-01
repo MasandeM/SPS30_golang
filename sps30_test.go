@@ -1,16 +1,38 @@
-package main
+package sps30_test
 
 import (
 	"fmt"
 	"log"
+	"testing"
 	"time"
 
 	"github.com/MasandeM/sps30"
-
 	"go.bug.st/serial"
 )
 
-func main() {
+func TestShdlcCRC(t *testing.T) {
+	tests := []struct {
+		addr     uint8
+		cmd      uint8
+		dataLen  uint8
+		data     []byte
+		expected uint8
+	}{
+		{addr: 0, cmd: 1, dataLen: 0, data: []byte{}, expected: 254},      // Stop Measurement
+		{addr: 0, cmd: 0, dataLen: 2, data: []byte{1, 3}, expected: 0xF9}, // Start Measurement
+		{addr: 0, cmd: 0x56, dataLen: 0, data: []byte{}, expected: 0xA9},  // Start Fan Cleaning
+		{addr: 0xFF, cmd: 0xFF, dataLen: 1, data: []byte{0xFF, 0xFF, 0xFF}, expected: 0x1}, //non existing cmd
+		{addr: 200, cmd: 100, dataLen: 4, data: []byte{50, 50, 50, 50}, expected: 99},
+	}
+
+	for _, test := range tests {
+		if got := sps30.ShdlcCRC(test.addr+test.cmd, test.dataLen, test.data); got != test.expected {
+			t.Errorf("shdlcCRC(0x%x + 0x%x, 0x%x, 0x%x) = 0x%x", test.addr, test.cmd, test.expected, test.data, got)
+		}
+	}
+}
+
+func Example() {
 
 	mode := &serial.Mode{
 		BaudRate: 115200,
