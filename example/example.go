@@ -54,7 +54,7 @@ func main() {
 
 		err = device.ReadMeasurement(&measurement)
 		if err != nil {
-			fmt.Printf("[-] error reading measurement: %v", err)
+			fmt.Printf("[-] error reading measurement: %v\n", err)
 		} else {
 			fmt.Printf(`
 measured values:
