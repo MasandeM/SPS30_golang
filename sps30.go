@@ -1,3 +1,4 @@
+// sps30 lib
 package sps30
 
 import (
@@ -287,8 +288,17 @@ func stuffData(data_len int, data []byte, stuffed_data *[shdlcFrameMaxTxFrameSiz
 	for i := 0; i < data_len; i++ {
 		switch data[i] {
 		case 0x11:
+			(*stuffed_data)[index] = 0x7D
+			(*stuffed_data)[index+1] = 0x31
+			index += 2
 		case 0x13:
+			(*stuffed_data)[index] = 0x7D
+			(*stuffed_data)[index+1] = 0x33
+			index += 2
 		case 0x7D:
+			(*stuffed_data)[index] = 0x7D
+			(*stuffed_data)[index+1] = 0x5D
+			index += 2
 		case 0x7E:
 			(*stuffed_data)[index] = 0x7D
 			(*stuffed_data)[index+1] = 0x5E
@@ -302,11 +312,11 @@ func stuffData(data_len int, data []byte, stuffed_data *[shdlcFrameMaxTxFrameSiz
 	return index
 }
 
-func shdlcCRC(header_sum uint8, data_len uint8, data []byte) uint8 {
+func shdlcCRC(headerSum uint8, dataLen uint8, data []byte) uint8 {
 
-	sum := header_sum + data_len
+	sum := headerSum + dataLen
 
-	for i := 0; i < int(data_len); i++ {
+	for i := 0; i < int(dataLen); i++ {
 		sum += data[i]
 	}
 
