@@ -208,6 +208,7 @@ func (d *Device) shdlcTx(addr uint8, cmd uint8, data_len uint8, data []byte) err
 	len += 1
 
 	_, err := d.uart.Write(tx_frame[:len])
+
 	if err != nil {
 		return fmt.Errorf("unable send data to sensor: %v", err)
 	}
@@ -223,11 +224,13 @@ func (d *Device) shdlcRx(max_data_len int, rx_header *shdlcRxHeader, data *[]byt
 	var crc uint8
 
 	frame_len, err := d.uart.Read(rx_frame)
+
 	if err != nil {
 		return fmt.Errorf("failed to read data from sensor: %v", err)
 	}
 
 	if frame_len < 1 || rx_frame[0] != shdlcStart {
+
 		return errors.New("missing SHDLC Start byte in Rx frame")
 	}
 
@@ -240,6 +243,7 @@ func (d *Device) shdlcRx(max_data_len int, rx_header *shdlcRxHeader, data *[]byt
 
 	data_index = header_index
 	i := 0
+
 	for data_index < frame_len-2 && i < max_data_len {
 		data_index = unstuffByte(rx_frame, data_index, &(*data)[i])
 		i += 1

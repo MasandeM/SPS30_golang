@@ -2,6 +2,7 @@ package sps30_test
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"testing"
@@ -11,6 +12,118 @@ import (
 	"go.bug.st/serial"
 )
 
+type fakeUart struct {
+	Data *bytes.Buffer
+}
+
+func (f fakeUart) UartBuffer() []byte {
+
+	return (*f.Data).Bytes()
+}
+
+func (f fakeUart) Write(p []byte) (n int, err error) {
+	(*f.Data).Write(p)
+	return 0, nil
+}
+
+func (f fakeUart) Break(time.Duration) error {
+	return nil
+}
+
+func (f fakeUart) SetMode(mode *serial.Mode) error {
+	return nil
+}
+func (f fakeUart) Read(p []byte) (n int, err error) {
+	(*f.Data).Read(p)
+	return len(p), nil
+}
+
+func (f fakeUart) Drain() error {
+	return nil
+}
+
+func (f fakeUart) ResetInputBuffer() error {
+	return nil
+}
+
+func (f fakeUart) ResetOutputBuffer() error {
+	return nil
+}
+
+func (f fakeUart) SetDTR(dtr bool) error {
+	return nil
+}
+
+func (f fakeUart) SetRTS(rts bool) error {
+	return nil
+}
+
+func (f fakeUart) GetModemStatusBits() (*serial.ModemStatusBits, error) {
+	return &serial.ModemStatusBits{}, nil
+}
+
+func (f fakeUart) SetReadTimeout(t time.Duration) error {
+	return nil
+}
+
+func (uart fakeUart) Close() error {
+	return nil
+}
+
+func TestShdlcTx(t *testing.T) {
+	tests := []struct {
+		addr    uint8
+		cmd     uint8
+		dataLen uint8
+		data    []byte
+		want    string
+	}{
+		{addr: 0x00, cmd: 0x00, dataLen: 0x02, data: []byte{0x01, 0x03}, want: "7e0000020103f97e"},
+		{addr: 0x00, cmd: 0x01, dataLen: 0x00, data: []byte{}, want: "7e000100fe7e"},
+		{addr: 0x00, cmd: 0x03, dataLen: 0x00, data: []byte{}, want: "7e000300fc7e"},
+		{addr: 0x00, cmd: 0x10, dataLen: 0x00, data: []byte{}, want: "7e001000ef7e"},
+		{addr: 0x00, cmd: 0xd3, dataLen: 0x00, data: []byte{}, want: "7e00d3002c7e"},
+	}
+
+	for _, test := range tests {
+		mockUart := fakeUart{Data: new(bytes.Buffer)}
+		device := sps30.New(mockUart)
+		device.ShdlcTx(test.addr, test.cmd, test.dataLen, test.data)
+
+		got := hex.EncodeToString(mockUart.UartBuffer())
+		if got != test.want {
+			t.Errorf("ShdlcTx(0x%x, 0x%x, 0x%x, 0x%x) = 0x%v", test.addr, test.cmd, test.dataLen, test.data, got)
+		}
+
+	}
+}
+
+func TestShdlcRx(t *testing.T) {
+	tests := []struct {
+		maxDataLen int
+		rxHeader   *sps30.ShdlcRxHeader
+		data       *[]byte
+		buffer     []byte
+		want       []byte
+	}{
+		{maxDataLen: 0, rxHeader: &sps30.ShdlcRxHeader{}, data: &[]byte{}, buffer: []byte{0x7e, 0x00, 0x00, 0x00, 0x00, 0xFF, 0x7e}, want: []byte{}},
+		{maxDataLen: 7, rxHeader: &sps30.ShdlcRxHeader{}, data: &[]byte{0, 0, 0, 0, 0, 0, 0}, buffer: []byte{0x7e, 0x00, 0xd1, 0x00, 0x07, 0x02, 0x03, 0x00, 0x07, 0x00, 0x02, 0x00, 0x19, 0x7e}, want: []byte{0x02, 0x03, 0x00, 0x07, 0x00, 0x02, 0x00}},
+	}
+
+	for _, test := range tests {
+		mockUart := fakeUart{Data: bytes.NewBuffer(test.buffer)}
+		device := sps30.New(mockUart)
+		err := device.ShdlcRx(test.maxDataLen, test.rxHeader, test.data)
+
+		if err != nil {
+			t.Error(err)
+		}
+
+		if !bytes.Equal((*test.data), test.want) {
+			t.Errorf("shdlcRx(0x%x, 0x%x, 0x%x) = 0x%x", test.maxDataLen, test.rxHeader, test.data, (*test.data))
+		}
+	}
+}
 func TestShdlcCRC(t *testing.T) {
 	tests := []struct {
 		addr    uint8
@@ -50,12 +163,41 @@ func TestStuffData(t *testing.T) {
 		{dataLen: 4, inputData: []byte{0x34, 0x03, 0x00, 0xF1}, outputData: &[sps30.ShdlcFrameMaxTxFrameSize]byte{}, inputPos: 0, outputPosWant: 4, outputDataWant: []byte{0x34, 0x03, 0x00, 0xF1}},
 	}
 	for _, test := range tests {
-		outPosGot := sps30.StuffData(test.dataLen, test.inputData, test.outputData, test.inputPos)
-		if outPosGot != test.outputPosWant {
-			t.Errorf("stuffData(0x%x, 0x%x, *[sps30.ShdlcFrameMaxTxFrameSize]byte, 0x%x) = 0x%x. Expected return value 0x%x", test.dataLen, test.inputData, test.inputPos, outPosGot, test.outputPosWant)
+		outputPos := sps30.StuffData(test.dataLen, test.inputData, test.outputData, test.inputPos)
+		if outputPos != test.outputPosWant {
+			t.Errorf("stuffData(0x%x, 0x%x, *[sps30.ShdlcFrameMaxTxFrameSize]byte, 0x%x) = 0x%x. Expected return value 0x%x", test.dataLen, test.inputData, test.inputPos, outputPos, test.outputPosWant)
 		}
 		if !bytes.Equal((*test.outputData)[:test.outputPosWant], test.outputDataWant) {
 			t.Errorf("stuffData(0x%x, 0x%x, *[sps30.ShdlcFrameMaxTxFrameSize]byte, 0x%x): output data '0x%x' does not match expected '0x%x'", test.dataLen, test.inputData, test.inputPos, (*test.outputData)[:test.outputPosWant], test.outputDataWant)
+		}
+	}
+}
+
+func TestUnstuffByte(t *testing.T) {
+
+	createUint8Pointer := func(val uint8) *uint8 {
+		return &val
+	}
+
+	tests := []struct {
+		data           []byte
+		index          int
+		outputData     *uint8
+		outputPosWant  int
+		outputDataWant uint8
+	}{
+		{data: []byte{0x7d, 0x31, 0x03, 0x05}, index: 0, outputData: createUint8Pointer(0), outputPosWant: 2, outputDataWant: 0x11},
+		{data: []byte{0x7d, 0x31, 0x03, 0x05}, index: 2, outputData: createUint8Pointer(0), outputPosWant: 3, outputDataWant: 0x03},
+		{data: []byte{0x7d, 0x31, 0x7D, 0x33}, index: 2, outputData: createUint8Pointer(0), outputPosWant: 4, outputDataWant: 0x13},
+		{data: []byte{0xFF, 0x31, 0x03, 0x05}, index: 0, outputData: createUint8Pointer(0), outputPosWant: 1, outputDataWant: 0xFF},
+	}
+	for _, test := range tests {
+		outputPos := sps30.UnstuffByte(test.data, test.index, test.outputData)
+		if outputPos != test.outputPosWant {
+			t.Errorf("unstuffByte(0x%x, 0x%x, []) = 0x%x. Expected return value 0x%x", test.data, test.index, outputPos, test.outputPosWant)
+		}
+		if *test.outputData != test.outputDataWant {
+			t.Errorf("unstuffByte(0x%x, 0x%x, []): output data '0x%x' does not match expected '0x%x'", test.data, test.index, *test.outputData, test.outputDataWant)
 		}
 	}
 }
