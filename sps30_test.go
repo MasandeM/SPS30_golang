@@ -70,6 +70,62 @@ func (uart fakeUart) Close() error {
 	return nil
 }
 
+func TestReadVersion(t *testing.T) {
+
+	tests := []struct {
+		versionInfo *sps30.VersionInfo
+		uartBuffer  []byte
+	}{
+		{versionInfo: &sps30.VersionInfo{}, uartBuffer: []byte{0x7e, 0x00, 0xd1, 0x00, 0x07, 0x02, 0x03, 0x00, 0x07, 0x00, 0x02, 0x00, 0x19, 0x7e}},
+	}
+
+	for _, test := range tests {
+		mockUart := fakeUart{Data: bytes.NewBuffer(test.uartBuffer)}
+		device := sps30.New(mockUart)
+		err := device.ReadVersion(test.versionInfo)
+
+		if err != nil {
+			t.Errorf("ReadVersion(*versionInfo): %v", err)
+		}
+	}
+
+}
+
+func TestStartMeasurement(t *testing.T) {
+	tests := []struct {
+		uartBuffer []byte
+	}{
+		{uartBuffer: []byte{0x7e, 0x00, 0x00, 0x43, 0x00, 0xbc, 0x7e}},
+	}
+	for _, test := range tests {
+		mockUart := fakeUart{Data: bytes.NewBuffer(test.uartBuffer)}
+		device := sps30.New(mockUart)
+		err := device.StartMeasurement()
+
+		if err != nil {
+			t.Errorf("StartMeasurement(): %v", err)
+		}
+	}
+}
+
+func TestReadMeasurement(t *testing.T) {
+	tests := []struct {
+		measurement *sps30.Measurement
+		uartBuffer  []byte
+	}{
+		{measurement: &sps30.Measurement{}, uartBuffer: []byte{0x7e, 0x00, 0x03, 0x00, 0x28, 0x3d, 0x20, 0x01, 0xe3, 0x3d, 0x5a, 0xde, 0xcf, 0x3d, 0x81, 0xcc, 0x53, 0x3d, 0x8c, 0x48, 0xae, 0x3e, 0x73, 0x39, 0x7d, 0x5e, 0x3e, 0x97, 0xb9, 0x03, 0x3e, 0x9e, 0x8b, 0x9f, 0x3e, 0x9f, 0xf1, 0x71, 0x3e, 0xa0, 0x4e, 0x18, 0x3f, 0x36, 0x50, 0x12, 0x5a, 0x7e}},
+	}
+	for _, test := range tests {
+		mockUart := fakeUart{Data: bytes.NewBuffer(test.uartBuffer)}
+		device := sps30.New(mockUart)
+		err := device.ReadMeasurement(test.measurement)
+
+		if err != nil {
+			t.Errorf("StartMeasurement(): %v", err)
+		}
+	}
+}
+
 func TestShdlcTx(t *testing.T) {
 	tests := []struct {
 		addr    uint8
@@ -78,11 +134,11 @@ func TestShdlcTx(t *testing.T) {
 		data    []byte
 		want    string
 	}{
-		{addr: 0x00, cmd: 0x00, dataLen: 0x02, data: []byte{0x01, 0x03}, want: "7e0000020103f97e"},
-		{addr: 0x00, cmd: 0x01, dataLen: 0x00, data: []byte{}, want: "7e000100fe7e"},
-		{addr: 0x00, cmd: 0x03, dataLen: 0x00, data: []byte{}, want: "7e000300fc7e"},
-		{addr: 0x00, cmd: 0x10, dataLen: 0x00, data: []byte{}, want: "7e001000ef7e"},
-		{addr: 0x00, cmd: 0xd3, dataLen: 0x00, data: []byte{}, want: "7e00d3002c7e"},
+		{addr: 0x00, cmd: 0x00, dataLen: 0x02, data: []byte{0x01, 0x03}, want: "7e0000020103f97e"}, // MOSI Start measurement
+		{addr: 0x00, cmd: 0x01, dataLen: 0x00, data: []byte{}, want: "7e000100fe7e"},               // MOSI Stop measurement
+		{addr: 0x00, cmd: 0x03, dataLen: 0x00, data: []byte{}, want: "7e000300fc7e"},               // MOSI Read Measurement Value
+		{addr: 0x00, cmd: 0x10, dataLen: 0x00, data: []byte{}, want: "7e001000ef7e"},               // MOSI Sleep
+		{addr: 0x00, cmd: 0xd3, dataLen: 0x00, data: []byte{}, want: "7e00d3002c7e"},               // MOSI Device reset
 	}
 
 	for _, test := range tests {
@@ -103,15 +159,17 @@ func TestShdlcRx(t *testing.T) {
 		maxDataLen int
 		rxHeader   *sps30.ShdlcRxHeader
 		data       *[]byte
-		buffer     []byte
+		uartBuffer []byte
 		want       []byte
 	}{
-		{maxDataLen: 0, rxHeader: &sps30.ShdlcRxHeader{}, data: &[]byte{}, buffer: []byte{0x7e, 0x00, 0x00, 0x00, 0x00, 0xFF, 0x7e}, want: []byte{}},
-		{maxDataLen: 7, rxHeader: &sps30.ShdlcRxHeader{}, data: &[]byte{0, 0, 0, 0, 0, 0, 0}, buffer: []byte{0x7e, 0x00, 0xd1, 0x00, 0x07, 0x02, 0x03, 0x00, 0x07, 0x00, 0x02, 0x00, 0x19, 0x7e}, want: []byte{0x02, 0x03, 0x00, 0x07, 0x00, 0x02, 0x00}},
+		{maxDataLen: 0, rxHeader: &sps30.ShdlcRxHeader{}, data: &[]byte{}, uartBuffer: []byte{0x7e, 0x00, 0x00, 0x00, 0x00, 0xFF, 0x7e}, want: []byte{}},                                                                                                            // MISO Read measurement
+		{maxDataLen: 7, rxHeader: &sps30.ShdlcRxHeader{}, data: &[]byte{0, 0, 0, 0, 0, 0, 0}, uartBuffer: []byte{0x7e, 0x00, 0xd1, 0x00, 0x07, 0x02, 0x7D, 0x31, 0x00, 0x07, 0x00, 0x02, 0x00, 0x0b, 0x7e}, want: []byte{0x02, 0x11, 0x00, 0x07, 0x00, 0x02, 0x00}}, // MISO Read Version, with byte stuffing
+		{maxDataLen: 5, rxHeader: &sps30.ShdlcRxHeader{}, data: &[]byte{0, 0, 0, 0, 0}, uartBuffer: []byte{0x7e, 0x00, 0xd2, 0x00, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x28, 0x7e}, want: []byte{0x00, 0x00, 0x00, 0x00, 0x00}},                                     // MISO Read Device Status Register
+
 	}
 
 	for _, test := range tests {
-		mockUart := fakeUart{Data: bytes.NewBuffer(test.buffer)}
+		mockUart := fakeUart{Data: bytes.NewBuffer(test.uartBuffer)}
 		device := sps30.New(mockUart)
 		err := device.ShdlcRx(test.maxDataLen, test.rxHeader, test.data)
 
@@ -135,7 +193,7 @@ func TestShdlcCRC(t *testing.T) {
 		{addr: 0, cmd: 1, dataLen: 0, data: []byte{}, want: 254},                       // Stop Measurement
 		{addr: 0, cmd: 0, dataLen: 2, data: []byte{1, 3}, want: 0xF9},                  // Start Measurement
 		{addr: 0, cmd: 0x56, dataLen: 0, data: []byte{}, want: 0xA9},                   // Start Fan Cleaning
-		{addr: 0xFF, cmd: 0xFF, dataLen: 1, data: []byte{0xFF, 0xFF, 0xFF}, want: 0x1}, //non existing cmd
+		{addr: 0xFF, cmd: 0xFF, dataLen: 1, data: []byte{0xFF, 0xFF, 0xFF}, want: 0x1}, // non existing cmd
 		{addr: 200, cmd: 100, dataLen: 4, data: []byte{50, 50, 50, 50}, want: 0x07},
 		{addr: 200, cmd: 100, dataLen: 4, data: []byte{50, 50, 50, 50}, want: 0x07},
 	}
