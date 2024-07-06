@@ -236,11 +236,14 @@ func (d *Device) shdlcRx(max_data_len int, rx_header *shdlcRxHeader, data *[]byt
 
 	// get Frame Header
 	header_index = 1
-	header_index = unstuffByte(rx_frame, header_index, &(*rx_header).addr)
-	header_index = unstuffByte(rx_frame, header_index, &(*rx_header).cmd)
-	header_index = unstuffByte(rx_frame, header_index, &(*rx_header).state)
-	header_index = unstuffByte(rx_frame, header_index, &(*rx_header).data_len)
+	header_index = unstuffByte(rx_frame, header_index, &rx_header.addr)
+	header_index = unstuffByte(rx_frame, header_index, &rx_header.cmd)
+	header_index = unstuffByte(rx_frame, header_index, &rx_header.state)
+	header_index = unstuffByte(rx_frame, header_index, &rx_header.data_len)
 
+	if len(*data) < int(rx_header.data_len) {
+		return errors.New("rx frame contains more data than expected")
+	}
 	data_index = header_index
 	i := 0
 
