@@ -70,6 +70,22 @@ func (uart fakeUart) Close() error {
 	return nil
 }
 
+func TestWakeup(t *testing.T) {
+	tests := []struct {
+		uartBuffer []byte
+	}{
+		{uartBuffer: []byte{0x7e, 0x00, 0x7d, 0x31, 0x43, 0x00, 0xab, 0x7e}},
+	}
+	for _, test := range tests {
+		mockUart := fakeUart{Data: bytes.NewBuffer(test.uartBuffer)}
+		device := sps30.New(mockUart)
+		err := device.Wakeup()
+
+		if err != nil {
+			t.Errorf("Wakeup(): %v", err)
+		}
+	}
+}
 func TestReadVersion(t *testing.T) {
 
 	tests := []struct {
