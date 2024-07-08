@@ -82,7 +82,7 @@ func TestWakeup(t *testing.T) {
 		err := device.Wakeup()
 
 		if err != nil {
-			t.Errorf("Wakeup(): %v", err)
+			t.Errorf("Wakeup() failed: %v", err)
 		}
 	}
 }
@@ -101,7 +101,7 @@ func TestReadVersion(t *testing.T) {
 		err := device.ReadVersion(test.versionInfo)
 
 		if err != nil {
-			t.Errorf("ReadVersion(*versionInfo): %v", err)
+			t.Errorf("ReadVersion(*versionInfo) failed: %v", err)
 		}
 	}
 
@@ -119,7 +119,7 @@ func TestStartMeasurement(t *testing.T) {
 		err := device.StartMeasurement()
 
 		if err != nil {
-			t.Errorf("StartMeasurement(): %v", err)
+			t.Errorf("StartMeasurement() failed: %v", err)
 		}
 	}
 }
@@ -129,7 +129,10 @@ func TestReadMeasurement(t *testing.T) {
 		measurement *sps30.Measurement
 		uartBuffer  []byte
 	}{
-		{measurement: &sps30.Measurement{}, uartBuffer: []byte{0x7e, 0x00, 0x03, 0x00, 0x28, 0x3d, 0x20, 0x01, 0xe3, 0x3d, 0x5a, 0xde, 0xcf, 0x3d, 0x81, 0xcc, 0x53, 0x3d, 0x8c, 0x48, 0xae, 0x3e, 0x73, 0x39, 0x7d, 0x5e, 0x3e, 0x97, 0xb9, 0x03, 0x3e, 0x9e, 0x8b, 0x9f, 0x3e, 0x9f, 0xf1, 0x71, 0x3e, 0xa0, 0x4e, 0x18, 0x3f, 0x36, 0x50, 0x12, 0x5a, 0x7e}},
+		{
+			measurement: &sps30.Measurement{},
+			uartBuffer:  []byte{0x7e, 0x00, 0x03, 0x00, 0x28, 0x3d, 0x20, 0x01, 0xe3, 0x3d, 0x5a, 0xde, 0xcf, 0x3d, 0x81, 0xcc, 0x53, 0x3d, 0x8c, 0x48, 0xae, 0x3e, 0x73, 0x39, 0x7d, 0x5e, 0x3e, 0x97, 0xb9, 0x03, 0x3e, 0x9e, 0x8b, 0x9f, 0x3e, 0x9f, 0xf1, 0x71, 0x3e, 0xa0, 0x4e, 0x18, 0x3f, 0x36, 0x50, 0x12, 0x5a, 0x7e},
+		},
 	}
 	for _, test := range tests {
 		mockUart := fakeUart{Data: bytes.NewBuffer(test.uartBuffer)}
@@ -137,7 +140,7 @@ func TestReadMeasurement(t *testing.T) {
 		err := device.ReadMeasurement(test.measurement)
 
 		if err != nil {
-			t.Errorf("StartMeasurement(): %v", err)
+			t.Errorf("StartMeasurement() failed: %v", err)
 		}
 	}
 }
@@ -150,11 +153,41 @@ func TestShdlcTx(t *testing.T) {
 		data    []byte
 		want    string
 	}{
-		{addr: 0x00, cmd: 0x00, dataLen: 0x02, data: []byte{0x01, 0x03}, want: "7e0000020103f97e"}, // MOSI Start measurement
-		{addr: 0x00, cmd: 0x01, dataLen: 0x00, data: []byte{}, want: "7e000100fe7e"},               // MOSI Stop measurement
-		{addr: 0x00, cmd: 0x03, dataLen: 0x00, data: []byte{}, want: "7e000300fc7e"},               // MOSI Read Measurement Value
-		{addr: 0x00, cmd: 0x10, dataLen: 0x00, data: []byte{}, want: "7e001000ef7e"},               // MOSI Sleep
-		{addr: 0x00, cmd: 0xd3, dataLen: 0x00, data: []byte{}, want: "7e00d3002c7e"},               // MOSI Device reset
+		{ // MOSI Start measurement
+			addr:    0x00,
+			cmd:     0x00,
+			dataLen: 0x02,
+			data:    []byte{0x01, 0x03},
+			want:    "7e0000020103f97e",
+		},
+		{ // MOSI Stop measurement
+			addr:    0x00,
+			cmd:     0x01,
+			dataLen: 0x00,
+			data:    []byte{},
+			want:    "7e000100fe7e",
+		},
+		{ // MOSI Read Measurement Value
+			addr:    0x00,
+			cmd:     0x03,
+			dataLen: 0x00,
+			data:    []byte{},
+			want:    "7e000300fc7e",
+		},
+		{ // MOSI Sleep
+			addr:    0x00,
+			cmd:     0x10,
+			dataLen: 0x00,
+			data:    []byte{},
+			want:    "7e001000ef7e",
+		},
+		{ // MOSI Device reset
+			addr:    0x00,
+			cmd:     0xd3,
+			dataLen: 0x00,
+			data:    []byte{},
+			want:    "7e00d3002c7e",
+		},
 	}
 
 	for _, test := range tests {
@@ -164,7 +197,7 @@ func TestShdlcTx(t *testing.T) {
 
 		got := hex.EncodeToString(mockUart.UartBuffer())
 		if got != test.want {
-			t.Errorf("ShdlcTx(0x%x, 0x%x, 0x%x, 0x%x) = 0x%v", test.addr, test.cmd, test.dataLen, test.data, got)
+			t.Errorf("ShdlcTx(0x%x, 0x%x, 0x%x, 0x%x) = 0x%v. Expected 0x%x", test.addr, test.cmd, test.dataLen, test.data, got, test.want)
 		}
 
 	}
@@ -178,10 +211,27 @@ func TestShdlcRx(t *testing.T) {
 		uartBuffer []byte
 		want       []byte
 	}{
-		{maxDataLen: 0, rxHeader: &sps30.ShdlcRxHeader{}, data: &[]byte{}, uartBuffer: []byte{0x7e, 0x00, 0x00, 0x00, 0x00, 0xFF, 0x7e}, want: []byte{}},                                                                                                            // MISO Read measurement
-		{maxDataLen: 7, rxHeader: &sps30.ShdlcRxHeader{}, data: &[]byte{0, 0, 0, 0, 0, 0, 0}, uartBuffer: []byte{0x7e, 0x00, 0xd1, 0x00, 0x07, 0x02, 0x7D, 0x31, 0x00, 0x07, 0x00, 0x02, 0x00, 0x0b, 0x7e}, want: []byte{0x02, 0x11, 0x00, 0x07, 0x00, 0x02, 0x00}}, // MISO Read Version, with byte stuffing
-		{maxDataLen: 5, rxHeader: &sps30.ShdlcRxHeader{}, data: &[]byte{0, 0, 0, 0, 0}, uartBuffer: []byte{0x7e, 0x00, 0xd2, 0x00, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x28, 0x7e}, want: []byte{0x00, 0x00, 0x00, 0x00, 0x00}},                                     // MISO Read Device Status Register
-
+		{ // MISO Read measurement
+			maxDataLen: 0,
+			rxHeader:   &sps30.ShdlcRxHeader{},
+			data:       &[]byte{},
+			uartBuffer: []byte{0x7e, 0x00, 0x00, 0x00, 0x00, 0xFF, 0x7e},
+			want:       []byte{},
+		},
+		{ // MISO Read Version, with byte stuffing
+			maxDataLen: 7,
+			rxHeader:   &sps30.ShdlcRxHeader{},
+			data:       &[]byte{0, 0, 0, 0, 0, 0, 0},
+			uartBuffer: []byte{0x7e, 0x00, 0xd1, 0x00, 0x07, 0x02, 0x7D, 0x31, 0x00, 0x07, 0x00, 0x02, 0x00, 0x0b, 0x7e},
+			want:       []byte{0x02, 0x11, 0x00, 0x07, 0x00, 0x02, 0x00},
+		},
+		{ // MISO Read Device Status Register
+			maxDataLen: 5,
+			rxHeader:   &sps30.ShdlcRxHeader{},
+			data:       &[]byte{0, 0, 0, 0, 0},
+			uartBuffer: []byte{0x7e, 0x00, 0xd2, 0x00, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x28, 0x7e},
+			want:       []byte{0x00, 0x00, 0x00, 0x00, 0x00},
+		},
 	}
 
 	for _, test := range tests {
@@ -194,7 +244,7 @@ func TestShdlcRx(t *testing.T) {
 		}
 
 		if !bytes.Equal((*test.data), test.want) {
-			t.Errorf("shdlcRx(0x%x, 0x%x, 0x%x) = 0x%x", test.maxDataLen, test.rxHeader, test.data, (*test.data))
+			t.Errorf("shdlcRx(0x%x, 0x%x, 0x%x) = 0x%x. Expected 0x%x", test.maxDataLen, test.rxHeader, test.data, (*test.data), test.want)
 		}
 	}
 }
@@ -206,17 +256,53 @@ func TestShdlcCRC(t *testing.T) {
 		data    []byte
 		want    uint8
 	}{
-		{addr: 0, cmd: 1, dataLen: 0, data: []byte{}, want: 254},                       // Stop Measurement
-		{addr: 0, cmd: 0, dataLen: 2, data: []byte{1, 3}, want: 0xF9},                  // Start Measurement
-		{addr: 0, cmd: 0x56, dataLen: 0, data: []byte{}, want: 0xA9},                   // Start Fan Cleaning
-		{addr: 0xFF, cmd: 0xFF, dataLen: 1, data: []byte{0xFF, 0xFF, 0xFF}, want: 0x1}, // non existing cmd
-		{addr: 200, cmd: 100, dataLen: 4, data: []byte{50, 50, 50, 50}, want: 0x07},
-		{addr: 200, cmd: 100, dataLen: 4, data: []byte{50, 50, 50, 50}, want: 0x07},
+		{ // Stop Measurement
+			addr:    0x00,
+			cmd:     0x01,
+			dataLen: 0x00,
+			data:    []byte{},
+			want:    0xFE,
+		},
+		{ // Start Measurement
+			addr:    0x00,
+			cmd:     0x00,
+			dataLen: 2,
+			data:    []byte{0x01, 0x03},
+			want:    0xF9,
+		},
+		{ // Start Fan Cleaning
+			addr:    0x00,
+			cmd:     0x56,
+			dataLen: 0x00,
+			data:    []byte{},
+			want:    0xA9,
+		},
+		{ // non existing cmd
+			addr:    0xFF,
+			cmd:     0xFF,
+			dataLen: 0x01,
+			data:    []byte{0xFF, 0xFF, 0xFF},
+			want:    0x1,
+		},
+		{ // non existing cmd
+			addr:    0x20,
+			cmd:     0xF0,
+			dataLen: 0x04,
+			data:    []byte{0x50, 0x50, 0x50, 0x50},
+			want:    0xab,
+		},
+		{ // non existing cmd
+			addr:    0x20,
+			cmd:     0xF0,
+			dataLen: 0x04,
+			data:    []byte{0x50, 0x50, 0x50, 0x50},
+			want:    0xab,
+		},
 	}
 
 	for _, test := range tests {
 		if got := sps30.ShdlcCRC(test.addr+test.cmd, test.dataLen, test.data); got != test.want {
-			t.Errorf("shdlcCRC(0x%x + 0x%x, 0x%x, 0x%x) = 0x%x", test.addr, test.cmd, test.want, test.data, got)
+			t.Errorf("shdlcCRC(0x%x + 0x%x, 0x%x, 0x%x) = 0x%x. Expected 0x%x", test.addr, test.cmd, test.want, test.data, got, test.want)
 		}
 	}
 }
@@ -231,10 +317,38 @@ func TestStuffData(t *testing.T) {
 		outputPosWant  int
 		outputDataWant []byte
 	}{
-		{dataLen: 1, inputData: []byte{0}, outputData: &[sps30.ShdlcFrameMaxTxFrameSize]byte{}, inputPos: 0, outputPosWant: 1, outputDataWant: []byte{0}},
-		{dataLen: 1, inputData: []byte{0x7E}, outputData: &[sps30.ShdlcFrameMaxTxFrameSize]byte{}, inputPos: 0, outputPosWant: 2, outputDataWant: []byte{0x7D, 0x5E}},
-		{dataLen: 4, inputData: []byte{0x7E, 0x7D, 0x11, 0x13}, outputData: &[sps30.ShdlcFrameMaxTxFrameSize]byte{}, inputPos: 0, outputPosWant: 8, outputDataWant: []byte{0x7D, 0x5E, 0x7D, 0x5D, 0x7D, 0x31, 0x7D, 0x33}},
-		{dataLen: 4, inputData: []byte{0x34, 0x03, 0x00, 0xF1}, outputData: &[sps30.ShdlcFrameMaxTxFrameSize]byte{}, inputPos: 0, outputPosWant: 4, outputDataWant: []byte{0x34, 0x03, 0x00, 0xF1}},
+		{
+			dataLen: 0x01, 
+			inputData: []byte{0x00}, 
+			outputData: &[sps30.ShdlcFrameMaxTxFrameSize]byte{},
+			inputPos: 0x00, 
+			outputPosWant: 0x01, 
+			outputDataWant: []byte{0},
+		},
+		{
+			dataLen: 0x01, 
+			inputData: []byte{0x7E}, 
+			outputData: &[sps30.ShdlcFrameMaxTxFrameSize]byte{},
+			inputPos: 0x00, 
+			outputPosWant: 0x02, 
+			outputDataWant: []byte{0x7D, 0x5E},
+		},
+		{
+			dataLen: 0x04, 
+			inputData: []byte{0x7E, 0x7D, 0x11, 0x13}, 
+			outputData: &[sps30.ShdlcFrameMaxTxFrameSize]byte{}, 
+			inputPos: 0, 
+			outputPosWant: 8, 
+			outputDataWant: []byte{0x7D, 0x5E, 0x7D, 0x5D, 0x7D, 0x31, 0x7D, 0x33},
+		},
+		{
+			dataLen: 0x04, 
+			inputData: []byte{0x34, 0x03, 0x00, 0xF1}, 
+			outputData: &[sps30.ShdlcFrameMaxTxFrameSize]byte{}, 
+			inputPos: 0, 
+			outputPosWant: 4, 
+			outputDataWant: []byte{0x34, 0x03, 0x00, 0xF1},
+		},
 	}
 	for _, test := range tests {
 		outputPos := sps30.StuffData(test.dataLen, test.inputData, test.outputData, test.inputPos)
@@ -260,10 +374,34 @@ func TestUnstuffByte(t *testing.T) {
 		outputPosWant  int
 		outputDataWant uint8
 	}{
-		{data: []byte{0x7d, 0x31, 0x03, 0x05}, index: 0, outputData: createUint8Pointer(0), outputPosWant: 2, outputDataWant: 0x11},
-		{data: []byte{0x7d, 0x31, 0x03, 0x05}, index: 2, outputData: createUint8Pointer(0), outputPosWant: 3, outputDataWant: 0x03},
-		{data: []byte{0x7d, 0x31, 0x7D, 0x33}, index: 2, outputData: createUint8Pointer(0), outputPosWant: 4, outputDataWant: 0x13},
-		{data: []byte{0xFF, 0x31, 0x03, 0x05}, index: 0, outputData: createUint8Pointer(0), outputPosWant: 1, outputDataWant: 0xFF},
+	{
+		data: []byte{0x7d, 0x31, 0x03, 0x05}, 
+		index: 0,
+		outputData: createUint8Pointer(0), 
+		outputPosWant: 2, 
+		outputDataWant: 0x11,
+	},
+	{
+		data: []byte{0x7d, 0x31, 0x03, 0x05}, 
+		index: 2,
+		outputData: createUint8Pointer(0), 
+		outputPosWant: 3, 
+		outputDataWant: 0x03,
+	},
+	{
+		data: []byte{0x7d, 0x31, 0x7D, 0x33}, 
+		index: 2,
+		outputData: createUint8Pointer(0), 
+		outputPosWant: 4, 
+		outputDataWant: 0x13,
+	},
+	{
+		data: []byte{0xFF, 0x31, 0x03, 0x05}, 
+		index: 0,
+		outputData: createUint8Pointer(0), 
+		outputPosWant: 1, 
+		outputDataWant: 0xFF,
+	},
 	}
 	for _, test := range tests {
 		outputPos := sps30.UnstuffByte(test.data, test.index, test.outputData)
